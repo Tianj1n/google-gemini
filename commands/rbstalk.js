@@ -2,7 +2,7 @@ const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
 module.exports = {
-  name: 'robloxstalk',
+  name: 'rbstalk',
   description: 'Fetch Roblox profile information by username.',
   usage: 'rbstalk <username>',
   category: 'others',
