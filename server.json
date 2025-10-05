@@ -1,0 +1,6 @@
+{
+  "port": 3000,
+  "verify_token": "pagebot",
+  "page_access_token_file": "token.txt",
+  "commands_path": "commands"
+}
