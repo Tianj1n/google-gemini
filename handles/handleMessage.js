@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { sendMessage } = require('./sendMessage');
 
+// Load command modules
 const commands = new Map();
 const lastImageByUser = new Map();
 const lastVideoByUser = new Map();
@@ -14,26 +15,28 @@ fs.readdirSync(path.join(__dirname, '../commands'))
     commands.set(command.name.toLowerCase(), command);
   });
 
-async function handleMessage(event, pageAccessToken) {
+async function handleMessage(event, pageAccessToken, recordCommandUsage) {
   const senderId = event?.sender?.id;
   if (!senderId) return console.error('Invalid event object');
 
   const messageText = event?.message?.text?.trim();
   const attachments = event?.message?.attachments || [];
 
+  // Detect current attachments if present
   const imageAttachment = attachments.find(a => a.type === 'image');
   const videoAttachment = attachments.find(a => a.type === 'video');
 
   const imageUrl = imageAttachment?.payload?.url;
   const videoUrl = videoAttachment?.payload?.url;
 
+  // Save to cache
   if (imageUrl) lastImageByUser.set(senderId, imageUrl);
   if (videoUrl) lastVideoByUser.set(senderId, videoUrl);
 
+  // Get latest media (prioritize current, fallback to previous)
   const lastImage = imageUrl || lastImageByUser.get(senderId);
   const lastVideo = videoUrl || lastVideoByUser.get(senderId);
   const mediaToUpload = lastImage || lastVideo;
-
 
   if (!messageText) return console.log('Received message without text');
 
@@ -42,12 +45,15 @@ async function handleMessage(event, pageAccessToken) {
     : messageText.split(' ');
 
   const commandKey = rawCommand.toLowerCase();
-  const mediaCommands = ['remini', 'catmoe', 'imgbb', 'restore', 'ocr',  'removebg', 'gemini', 'imgur', 'zombie', 'blur', 'vampire'];
+  const mediaCommands = ['remini', 'catmoe', 'imgbb', 'restore', 'ocr', 'removebg', 'gemini', 'imgur', 'zombie', 'blur', 'vampire'];
 
   try {
     console.log(`Received command: ${commandKey}, args: ${args.join(' ')}`);
 
     if (mediaCommands.includes(commandKey)) {
+      // ✅ Log media command usage
+      if (recordCommandUsage) recordCommandUsage(commandKey);
+
       switch (commandKey) {
         case 'remini':
         case 'restore':
@@ -76,54 +82,54 @@ async function handleMessage(event, pageAccessToken) {
             lastImageByUser.delete(senderId);
             lastVideoByUser.delete(senderId);
           } else {
-            await sendMessage(senderId, {
-              text: '❌ Please send an image or video first, then type "imgbb".'
-            }, pageAccessToken);
+            await sendMessage(senderId, { text: '❌ Please send an image or video first, then type "imgbb".' }, pageAccessToken);
           }
           break;
-  case 'imgur':
+
+        case 'imgur':
           if (mediaToUpload) {
             await commands.get('imgur').execute(senderId, [], pageAccessToken, mediaToUpload);
             lastImageByUser.delete(senderId);
             lastVideoByUser.delete(senderId);
           } else {
-            await sendMessage(senderId, {
-              text: '❌ Please send an image or video first, then type "imgur".'
-            }, pageAccessToken);
+            await sendMessage(senderId, { text: '❌ Please send an image or video first, then type "imgur".' }, pageAccessToken);
           }
           break;
-  case 'ocr':
+
+        case 'ocr':
           if (mediaToUpload) {
             await commands.get('ocr').execute(senderId, [], pageAccessToken, mediaToUpload);
             lastImageByUser.delete(senderId);
             lastVideoByUser.delete(senderId);
           } else {
-            await sendMessage(senderId, {
-              text: '❌ Please send an image first, then type "ocr".'
-            }, pageAccessToken);
+            await sendMessage(senderId, { text: '❌ Please send an image first, then type "ocr".' }, pageAccessToken);
           }
           break;
-  case 'catmoe':
+
+        case 'catmoe':
           if (mediaToUpload) {
             await commands.get('catmoe').execute(senderId, [], pageAccessToken, mediaToUpload);
             lastImageByUser.delete(senderId);
             lastVideoByUser.delete(senderId);
           } else {
-            await sendMessage(senderId, {
-              text: '❌ Please send an image first, then type "ocr".'
-            }, pageAccessToken);
+            await sendMessage(senderId, { text: '❌ Please send an image first, then type "catmoe".' }, pageAccessToken);
           }
           break;
       }
       return;
     }
 
-    // Normal command
+    // ✅ Normal command
     if (commands.has(commandKey)) {
+      if (recordCommandUsage) recordCommandUsage(commandKey);
       await commands.get(commandKey).execute(senderId, args, pageAccessToken, event, sendMessage);
-    } else if (commands.has('ai')) {
+    } 
+    // ✅ AI fallback
+    else if (commands.has('ai')) {
+      if (recordCommandUsage) recordCommandUsage('ai');
       await commands.get('ai').execute(senderId, [messageText], pageAccessToken, event, sendMessage);
-    } else {
+    } 
+    else {
       await sendMessage(senderId, {
         text: '❓ Unknown command and AI fallback is unavailable.'
       }, pageAccessToken);
@@ -137,4 +143,4 @@ async function handleMessage(event, pageAccessToken) {
   }
 }
 
-module.exports = { handleMessage }; 
+module.exports = { handleMessage };
