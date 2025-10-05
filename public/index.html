@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Server Activated</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Server Status & Command Usage</title>
   <style>
     body {
       margin: 0;
@@ -13,9 +13,11 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       height: 100vh;
       text-align: center;
+      padding: 30px 0;
+      overflow-y: auto;
     }
 
     h1 {
@@ -23,39 +25,201 @@
       margin-bottom: 0.5rem;
     }
 
-    p {
-      font-size: 1.2rem;
-      margin: 0;
+    .container {
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 25px 40px;
+      border-radius: 14px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+      max-width: 750px;
+      width: 90%;
+      margin-bottom: 20px;
     }
 
-    .container {
-      background-color: rgba(0, 0, 0, 0.4);
-      padding: 30px 50px;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-      max-width: 600px;
+    .status {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+    }
+
+    .uptime, .time {
+      font-size: 1.1rem;
+      margin: 5px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    th {
+      text-transform: uppercase;
+      font-size: 0.9rem;
+      color: #a3bffa;
+    }
+
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .refresh-note {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      opacity: 0.8;
     }
 
     @media (max-width: 600px) {
-      .container {
-        padding: 20px;
-        width: 90%;
-      }
-
       h1 {
         font-size: 2rem;
       }
-
-      p {
+      .container {
+        padding: 20px;
+      }
+      .status, .uptime, .time {
         font-size: 1rem;
+      }
+      th, td {
+        font-size: 0.85rem;
       }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🚀 Pagebot has been activated </h1>
-    <p>Uptime URL through uptime.betterstack.com</p>
+    <h1>🚀 Pagebot Messenger Server</h1>
+    <p class="status" id="status">Loading status...</p>
+    <p class="uptime" id="uptime">Loading uptime...</p>
+    <p class="time" id="time">Loading current time...</p>
   </div>
+
+  <div class="container">
+    <h2>📊 Command Usage Rankings</h2>
+    <table id="usageTable">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Command</th>
+          <th>Calls</th>
+          <th>Last Used</th>
+        </tr>
+      </thead>
+      <tbody id="usageBody">
+        <tr><td colspan="4">Loading command usage...</td></tr>
+      </tbody>
+    </table>
+    <p class="refresh-note">Automatically updates every 15 seconds</p>
+  </div>
+
+  <script>
+    let uptimeData = null;
+
+    function formatUptime(obj) {
+      return `${obj.years}y ${obj.months}mo ${obj.days}d ${obj.hours}h ${obj.minutes}m ${obj.seconds}s`;
+    }
+
+    // 🕒 Fetch uptime info
+    async function fetchUptime() {
+      try {
+        const res = await fetch('/api/uptime');
+        const data = await res.json();
+
+        document.getElementById('status').textContent = `Status: ${data.status}`;
+        uptimeData = data.uptime;
+        document.getElementById('uptime').textContent = `Uptime: ${formatUptime(uptimeData)}`;
+        document.getElementById('time').textContent = `Current Time: ${data.current_time}`;
+      } catch (err) {
+        document.getElementById('status').textContent = "Error fetching uptime.";
+      }
+    }
+
+    // 📈 Fetch command usage rankings
+    async function fetchUsage() {
+      try {
+        const res = await fetch('/api/usage');
+        const data = await res.json();
+        const tbody = document.getElementById('usageBody');
+        tbody.innerHTML = "";
+
+        const rows = data.top_commands || [];
+
+        if (rows.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='4'>No command usage data yet.</td></tr>";
+          return;
+        }
+
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${row.rank}</td>
+            <td>${row.command}</td>
+            <td>${row.count}</td>
+            <td>${row.last_used}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        document.getElementById('usageBody').innerHTML =
+          "<tr><td colspan='4'>Error loading usage data.</td></tr>";
+      }
+    }
+
+    // ⏰ Increment uptime locally every second
+    function tickUptime() {
+      if (!uptimeData) return;
+
+      uptimeData.seconds++;
+      if (uptimeData.seconds >= 60) {
+        uptimeData.seconds = 0;
+        uptimeData.minutes++;
+      }
+      if (uptimeData.minutes >= 60) {
+        uptimeData.minutes = 0;
+        uptimeData.hours++;
+      }
+      if (uptimeData.hours >= 24) {
+        uptimeData.hours = 0;
+        uptimeData.days++;
+      }
+      if (uptimeData.days >= 30) {
+        uptimeData.days = 0;
+        uptimeData.months++;
+      }
+      if (uptimeData.months >= 12) {
+        uptimeData.months = 0;
+        uptimeData.years++;
+      }
+
+      document.getElementById('uptime').textContent = `Uptime: ${formatUptime(uptimeData)}`;
+    }
+
+    // 🕰 Real-time ticking clock
+    function tickClock() {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      const phTime = new Date(utc + (8 * 3600000));
+      document.getElementById('time').textContent =
+        "Current Time: " + phTime.toLocaleString("en-PH", { hour12: false }) + " GMT+8 (Manila)";
+    }
+
+    // Initial loads
+    fetchUptime();
+    fetchUsage();
+
+    // Refresh uptime every 10s
+    setInterval(fetchUptime, 10000);
+
+    // Refresh usage rankings every 15s
+    setInterval(fetchUsage, 15000);
+
+    // Local ticking every second
+    setInterval(() => {
+      tickUptime();
+      tickClock();
+    }, 1000);
+  </script>
 </body>
 </html>
