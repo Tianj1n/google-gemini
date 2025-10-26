@@ -69,7 +69,7 @@ ${convertToBold(result)}
     await sendConcatenatedMessage(senderId, formatted, pageAccessToken);
 
   } catch (err) {
-    console.error("Gemini Error:", err);
+    console.error("Down API:", err);
     await sendMessage(senderId, { text: `Error: ${err.message || "Something went wrong."}` }, pageAccessToken);
   }
 }
