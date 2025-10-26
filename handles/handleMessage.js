@@ -3,9 +3,10 @@ const path = require('path');
 const { sendMessage } = require('./sendMessage');
 const axios = require("axios");
 
-// Load command modules (optional future commands)
+// Load command modules
 const commands = new Map();
 const lastImageByUser = new Map();
+const lastVideoByUser = new Map();
 const prefix = '-';
 
 fs.readdirSync(path.join(__dirname, '../commands'))
@@ -15,11 +16,10 @@ fs.readdirSync(path.join(__dirname, '../commands'))
     commands.set(command.name.toLowerCase(), command);
   });
 
-// ✅ Gemini Vision API URL
+// ✅ Updated Gemini API URL
 const GEMINI_API_URL = "https://kryptonite-api-library.onrender.com/api/gemini-vision";
 const USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36";
 
-// ✅ Bold font converter (for formatted AI replies)
 const fontMapping = {
   'A': '𝗔', 'B': '𝗕', 'C': '𝗖', 'D': '𝗗', 'E': '𝗘', 'F': '𝗙', 'G': '𝗚',
   'H': '𝗛', 'I': '𝗜', 'J': '𝗝', 'K': '𝗞', 'L': '𝗟', 'M': '𝗠', 'N': '𝗡',
@@ -38,14 +38,12 @@ function convertToBold(text) {
   });
 }
 
-// 🧠 Gemini Vision (Text + Image Analysis)
 async function handleGemini(senderId, prompt, pageAccessToken, event, imageUrl) {
   if (!prompt && !imageUrl) {
-    return sendMessage(senderId, { text: "❗ Please provide a question or send an image to analyze." }, pageAccessToken);
+    return sendMessage(senderId, { text: "𝖯𝖱𝖮𝖵𝖨𝖣𝖤 𝖰𝖴𝖤𝖲𝖳𝖨𝖮𝖭 𝖮𝖱 𝖨𝖬𝖠𝖦𝖤." }, pageAccessToken);
   }
 
   try {
-    // 🔍 Get image if replying to one or attached
     if (!imageUrl) {
       if (event.message.reply_to && event.message.reply_to.mid) {
         imageUrl = await getRepliedImage(event.message.reply_to.mid, pageAccessToken);
@@ -65,16 +63,14 @@ async function handleGemini(senderId, prompt, pageAccessToken, event, imageUrl) 
 ─────────────
 ${convertToBold(result)}
 ─────────────`;
-
     await sendConcatenatedMessage(senderId, formatted, pageAccessToken);
 
   } catch (err) {
     console.error("Gemini Error:", err);
-    await sendMessage(senderId, { text: `❌ Error: ${err.message || "Something went wrong."}` }, pageAccessToken);
+    await sendMessage(senderId, { text: `Error: ${err.message || "Something went wrong."}` }, pageAccessToken);
   }
 }
 
-// 🖼️ Get replied image from Facebook message
 async function getRepliedImage(mid, pageAccessToken) {
   try {
     const { data } = await axios.get(`https://graph.facebook.com/v21.0/${mid}/attachments`, {
@@ -87,7 +83,6 @@ async function getRepliedImage(mid, pageAccessToken) {
   }
 }
 
-// 🔁 Split long messages for Messenger limit
 async function sendConcatenatedMessage(senderId, text, pageAccessToken) {
   const maxMessageLength = 2000;
   if (text.length > maxMessageLength) {
@@ -109,7 +104,7 @@ function splitMessageIntoChunks(message, chunkSize) {
   return chunks;
 }
 
-// 🧹 Clear conversation
+// 🧹 Gemini Clear Command (API-based)
 async function handleGeminiClear(senderId, pageAccessToken) {
   try {
     const { data } = await axios.get(GEMINI_API_URL, {
@@ -117,7 +112,7 @@ async function handleGeminiClear(senderId, pageAccessToken) {
       headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }
     });
 
-    const message = data.response || "🧹 Gemini conversation cleared successfully.";
+    const message = data.response || "🧹 Conversation successfully cleared.";
     await sendMessage(senderId, { text: message }, pageAccessToken);
   } catch (err) {
     console.error("Gemini Clear Error:", err);
@@ -125,7 +120,6 @@ async function handleGeminiClear(senderId, pageAccessToken) {
   }
 }
 
-// 📩 Main message handler
 async function handleMessage(event, pageAccessToken, recordCommandUsage) {
   const senderId = event?.sender?.id;
   if (!senderId) return console.error('Invalid event object');
@@ -133,27 +127,22 @@ async function handleMessage(event, pageAccessToken, recordCommandUsage) {
   const messageText = event?.message?.text?.trim();
   const attachments = event?.message?.attachments || [];
 
-  // 🖼️ Check if message has image attachment
   const imageAttachment = attachments.find(a => a.type === 'image');
+  const videoAttachment = attachments.find(a => a.type === 'video');
+
   const imageUrl = imageAttachment?.payload?.url;
+  const videoUrl = videoAttachment?.payload?.url;
 
-  // ✅ Remember the last sent image for analyzing
-  if (imageUrl) {
-    lastImageByUser.set(senderId, imageUrl);
-  }
+  if (imageUrl) lastImageByUser.set(senderId, imageUrl);
+  if (videoUrl) lastVideoByUser.set(senderId, videoUrl);
 
-  const lastImage = lastImageByUser.get(senderId);
+  const lastImage = imageUrl || lastImageByUser.get(senderId);
+  const lastVideo = videoUrl || lastVideoByUser.get(senderId);
+  const mediaToUpload = lastImage || lastVideo;
 
-  if (!messageText) {
-    // If only image sent → Analyze automatically
-    if (lastImage) {
-      await handleGemini(senderId, "", pageAccessToken, event, lastImage);
-      lastImageByUser.delete(senderId);
-    }
-    return;
-  }
+  if (!messageText) return console.log('Received message without text');
 
-  // 🧹 Clear conversation command
+  // 🧹 Check for clear command (API-based)
   if (messageText.toLowerCase() === "clear") {
     await handleGeminiClear(senderId, pageAccessToken);
     return;
@@ -164,20 +153,52 @@ async function handleMessage(event, pageAccessToken, recordCommandUsage) {
     : messageText.split(' ');
 
   const commandKey = rawCommand.toLowerCase();
+  const mediaCommands = [''];
 
   try {
     console.log(`Received command: ${commandKey}, args: ${args.join(' ')}`);
 
-    // ✅ Gemini command (manual)
-    if (commandKey === 'gemini') {
+    if (mediaCommands.includes(commandKey)) {
       if (recordCommandUsage) recordCommandUsage(commandKey);
-      await handleGemini(senderId, args.join(" "), pageAccessToken, event, lastImage);
-      lastImageByUser.delete(senderId);
+      switch (commandKey) {
+        case '':
+          await handleGemini(senderId, args.join(" "), pageAccessToken, event, lastImage);
+          lastImageByUser.delete(senderId);
+          break;
+
+        // unchanged commands
+        case '':
+        case '':
+          if (lastImage) {
+            await commands.get(commandKey).execute(senderId, [], pageAccessToken, lastImage);
+            lastImageByUser.delete(senderId);
+          } else {
+            await sendMessage(senderId, { text: `❌ Please send an image first, then type "${commandKey}".` }, pageAccessToken);
+          }
+          break;
+
+        case '':
+          if (mediaToUpload) {
+            await commands.get(commandKey).execute(senderId, [], pageAccessToken, mediaToUpload);
+            lastImageByUser.delete(senderId);
+            lastVideoByUser.delete(senderId);
+          } else {
+            await sendMessage(senderId, { text: `❌ Please send a file first, then type "${commandKey}".` }, pageAccessToken);
+          }
+          break;
+      }
       return;
     }
 
-    // ✅ Default fallback → Gemini Vision (conversation mode)
-    await handleGemini(senderId, messageText, pageAccessToken, event, lastImage);
+    // ✅ Normal command
+    if (commands.has(commandKey)) {
+      if (recordCommandUsage) recordCommandUsage(commandKey);
+      await commands.get(commandKey).execute(senderId, args, pageAccessToken, event, sendMessage);
+    } 
+    // ✅ Default Gemini fallback
+    else {
+      await handleGemini(senderId, messageText, pageAccessToken, event, lastImage);
+    }
 
   } catch (error) {
     console.error(`Error executing command "${commandKey}":`, error);
