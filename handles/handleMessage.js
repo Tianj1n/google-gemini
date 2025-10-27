@@ -45,7 +45,7 @@ async function handleGemini(senderId, prompt, pageAccessToken, event, imageUrl) 
 
   try {
     // 🕐 Send thinking indicator before processing
-    await sendMessage(senderId, { text: "✦ | 𝚃𝚑𝚒𝚗𝚔𝚒𝚗𝚐 𝚙𝚕𝚎𝚊𝚜𝚎 𝚠𝚊𝚒𝚝.." }, pageAccessToken);
+    await sendMessage(senderId, { text: "✦ Thinking please wait.." }, pageAccessToken);
 
     if (!imageUrl) {
       if (event.message.reply_to && event.message.reply_to.mid) {
