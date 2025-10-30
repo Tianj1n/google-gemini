@@ -16,8 +16,10 @@ fs.readdirSync(path.join(__dirname, '../commands'))
     commands.set(command.name.toLowerCase(), command);
   });
 
-// ✅ Updated Gemini API URL
+// ✅ Gemini API URL with apikey
 const GEMINI_API_URL = "https://kryptonite-api-library.onrender.com/api/gemini-vision";
+const API_KEY = "AIzaSyBAG9ad84ZWCDSAjey346zCgXLTjMLr3aE";
+
 const USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36";
 
 const fontMapping = {
@@ -44,7 +46,7 @@ async function handleGemini(senderId, prompt, pageAccessToken, event, imageUrl) 
   }
 
   try {
-    // 🕐 Send thinking indicator before processing
+    // 🕐 Thinking indicator
     await sendMessage(senderId, { text: "✦ Thinking please wait.." }, pageAccessToken);
 
     if (!imageUrl) {
@@ -56,7 +58,12 @@ async function handleGemini(senderId, prompt, pageAccessToken, event, imageUrl) 
     }
 
     const { data } = await axios.get(GEMINI_API_URL, {
-      params: { prompt, uid: senderId, imgUrl: imageUrl || "" },
+      params: { 
+        prompt, 
+        uid: senderId, 
+        imgUrl: imageUrl || "",
+        apikey: API_KEY   // ✅ Added API key
+      },
       headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }
     });
 
@@ -111,7 +118,11 @@ function splitMessageIntoChunks(message, chunkSize) {
 async function handleGeminiClear(senderId, pageAccessToken) {
   try {
     const { data } = await axios.get(GEMINI_API_URL, {
-      params: { prompt: "clear", uid: senderId },
+      params: { 
+        prompt: "clear", 
+        uid: senderId, 
+        apikey: API_KEY   // ✅ Added API key
+      },
       headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }
     });
 
@@ -145,7 +156,7 @@ async function handleMessage(event, pageAccessToken, recordCommandUsage) {
 
   if (!messageText) return console.log('Received message without text');
 
-  // 🧹 Check for clear command (API-based)
+  // 🧹 Clear
   if (messageText.toLowerCase() === "clear") {
     await handleGeminiClear(senderId, pageAccessToken);
     return;
@@ -168,27 +179,6 @@ async function handleMessage(event, pageAccessToken, recordCommandUsage) {
           await handleGemini(senderId, args.join(" "), pageAccessToken, event, lastImage);
           lastImageByUser.delete(senderId);
           break;
-
-        // unchanged commands
-        case '':
-        case '':
-          if (lastImage) {
-            await commands.get(commandKey).execute(senderId, [], pageAccessToken, lastImage);
-            lastImageByUser.delete(senderId);
-          } else {
-            await sendMessage(senderId, { text: `❌ Please send an image first, then type "${commandKey}".` }, pageAccessToken);
-          }
-          break;
-
-        case '':
-          if (mediaToUpload) {
-            await commands.get(commandKey).execute(senderId, [], pageAccessToken, mediaToUpload);
-            lastImageByUser.delete(senderId);
-            lastVideoByUser.delete(senderId);
-          } else {
-            await sendMessage(senderId, { text: `❌ Please send a file first, then type "${commandKey}".` }, pageAccessToken);
-          }
-          break;
       }
       return;
     }
@@ -197,9 +187,8 @@ async function handleMessage(event, pageAccessToken, recordCommandUsage) {
     if (commands.has(commandKey)) {
       if (recordCommandUsage) recordCommandUsage(commandKey);
       await commands.get(commandKey).execute(senderId, args, pageAccessToken, event, sendMessage);
-    } 
-    // ✅ Default Gemini fallback
-    else {
+    } else {
+      // ✅ Default Gemini fallback
       await handleGemini(senderId, messageText, pageAccessToken, event, lastImage);
     }
 
